@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CoolMap Global · Live heat risk and AI cooling planner</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="top">
+  <button class="brand" data-go="home" type="button"><span class="logo">🌡️</span><span class="name">CoolMap</span></button>
+  <nav>
+    <button class="nav" data-go="map" type="button">Live map</button>
+    <button class="nav" data-go="compare" type="button">Compare</button>
+  </nav>
+  <div class="acts">
+    <button id="unit" class="chip" type="button" title="Switch units">°C</button>
+    <button id="theme" class="chip" type="button" title="Toggle light / dark">🌙</button>
+  </div>
+</header>
+
+<!-- HOME -->
+<section id="home" class="view">
+  <div class="hero">
+    <h1>Know how hot it really feels, anywhere on Earth.</h1>
+    <p>Live feels-like temperature, air quality and an AI cooling plan for any city, neighbourhood or landmark.</p>
+    <div class="searchbox big">
+      <input id="q" type="search" placeholder="Search any place in the world" autocomplete="off" aria-label="Search a place" />
+      <div id="sugg" class="sugg hidden"></div>
+    </div>
+
+    <div class="popular" id="popular">
+      <span class="muted small">Popular:</span>
+      <button class="chip" data-city="Hyderabad" data-lat="17.385" data-lon="78.4867" type="button">Hyderabad</button>
+      <button class="chip" data-city="Delhi" data-lat="28.6139" data-lon="77.209" type="button">Delhi</button>
+      <button class="chip" data-city="Mumbai" data-lat="19.076" data-lon="72.8777" type="button">Mumbai</button>
+      <button class="chip" data-city="Bengaluru" data-lat="12.9716" data-lon="77.5946" type="button">Bengaluru</button>
+      <button class="chip" data-city="Dubai" data-lat="25.2048" data-lon="55.2708" type="button">Dubai</button>
+      <button class="chip" data-city="London" data-lat="51.5072" data-lon="-0.1276" type="button">London</button>
+      <button class="chip" data-city="New York" data-lat="40.7128" data-lon="-74.006" type="button">New York</button>
+      <button class="chip" data-city="Tokyo" data-lat="35.6762" data-lon="139.6503" type="button">Tokyo</button>
+    </div>
+
+    <div class="cta">
+      <button class="btn solid" data-go="map" type="button">Open live map</button>
+      <button class="btn" data-go="compare" type="button">Compare two places</button>
+      <button class="btn" id="loc" type="button">📍 Use my location</button>
+    </div>
+    <div class="scale">
+      <div id="bar" class="bar"></div>
+      <div class="ticks"><span>-10°</span><span>0°</span><span>10°</span><span>20°</span><span>30°</span><span>40°</span><span>50°C</span></div>
+    </div>
+    <p class="muted small">Each dot is a city right now, placed by how hot it feels. Click one to open it.</p>
+  </div>
+  <div class="wrap">
+    <h3>Live across the world</h3>
+    <div id="ticker" class="ticker">Loading…</div>
+    <p class="foot">Weather and air quality: Open-Meteo · Map: OpenStreetMap · Risk levels are prototype thresholds on feels-like temperature, not an official warning.</p>
+  </div>
+</section>
+
+<!-- LIVE MAP -->
+<section id="mapView" class="view hidden">
+  <div class="app">
+    <div class="mapcol">
+      <div id="map"></div>
+      <div class="legend" id="legend"></div>
+      <div class="layerbar">
+        <button id="toggleQuakes" class="chip" type="button">🚨 Quakes</button>
+        <button id="toggleCyclones" class="chip" type="button">🌀 Cyclones</button>
+        <button id="toggleSatellite" class="chip" type="button">🛰️ Satellite</button>
+      </div>
+      <div class="layerinfo" id="layerInfo"></div>
+    </div>
+    <div class="rep">
+      <div class="searchbox">
+        <input id="q2" type="search" placeholder="Search any place in the world" autocomplete="off" aria-label="Search a place" />
+        <div id="sugg2" class="sugg hidden"></div>
+      </div>
+      <div id="empty" class="empty">
+        <h2>Pick a place</h2>
+        <p class="muted">Search above or click anywhere on the map to get a live report.</p>
+      </div>
+      <div id="report" class="hidden">
+        <div class="place">
+          <div><h2 id="pName">-</h2><p id="pSub" class="muted">-</p></div>
+          <span id="badge" class="badge">-</span>
+        </div>
+        <div class="now">
+          <div id="feels" class="feels">-</div>
+          <div><div id="wxText" class="wx">-</div><div id="actual" class="muted">-</div><div id="stamp" class="muted small">-</div></div>
+        </div>
+        <div class="metrics" id="metrics"></div>
+        <div class="row">
+          <button id="share" class="chip" type="button">🔗 Copy link</button>
+          <button id="toCmp" class="chip" type="button">⇄ Compare with another place</button>
+        </div>
+        <div class="block"><h3>Next 24 hours (feels-like)</h3><canvas id="chart" height="150"></canvas></div>
+        <div class="block">
+          <h3>Tree-planting simulator</h3>
+          <div class="sim">
+            <div><b id="treeN">1,000</b> trees</div>
+            <input id="trees" type="range" min="100" max="10000" step="100" value="1000" aria-label="Number of trees" />
+            <div id="simOut" class="simout">-</div>
+          </div>
+          <p class="muted small">Planning estimate scaled from a 1,000-tree reference (0.5 to 1.5°C, capped at 3°C). Real cooling depends on canopy, species, irrigation and urban form.</p>
+        </div>
+        <div class="block">
+          <h3>AI climate analyst</h3>
+          <div class="row">
+            <button class="chip" data-mode="brief" type="button">Heat briefing</button>
+            <button class="chip" data-mode="plan" type="button">Cooling plan</button>
+            <button class="chip" data-mode="safety" type="button">Safety tips</button>
+          </div>
+          <div id="aiOut" class="aiout muted">Pick a report or ask a question below.</div>
+          <div class="ask">
+            <input id="aiQ" placeholder="e.g. When should I go for a run?" />
+            <button id="aiGo" class="chip solid" type="button">Ask</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARE -->
+<section id="cmpView" class="view hidden">
+  <div class="wrap">
+    <h2>Compare two places</h2>
+    <div class="cmpbar">
+      <div class="searchbox"><input id="qa" placeholder="First place" autocomplete="off" /><div id="sa" class="sugg hidden"></div></div>
+      <span class="vs">vs</span>
+      <div class="searchbox"><input id="qb" placeholder="Second place" autocomplete="off" /><div id="sb" class="sugg hidden"></div></div>
+      <button id="cmpGo" class="btn solid" type="button">Compare</button>
+    </div>
+    <div id="cmpOut" class="hidden">
+      <div id="verdict" class="verdict"></div>
+      <div id="cmpCards" class="cmpcards"></div>
+      <div class="block"><h3>Next 24 hours (feels-like)</h3><canvas id="cchart" height="170"></canvas><div id="clegend" class="small"></div></div>
+      <div class="block">
+        <h3>AI comparison</h3>
+        <div id="cAi" class="aiout muted">Ask the AI which place is riskier and why.</div>
+        <div class="row"><button id="cAiGo" class="chip solid" type="button">Explain with AI</button><button id="cShare" class="chip" type="button">🔗 Copy link</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
+
+<!-- cmd syntax
+ cd /d "C:\Users\nurul\OneDrive\Desktop\coolmap_hyd"
+ npm start -->
